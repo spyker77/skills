@@ -4,6 +4,10 @@ import urllib.request
 from time import sleep
 from multiprocessing import Pool
 
+# If [SSL: CERTIFICATE_VERIFY_FAILED] occurs, then enable the following 2 lines.
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 while True:
     try:
         from bs4 import BeautifulSoup
@@ -254,7 +258,7 @@ def process_data(all_data):
 if __name__ == "__main__":
     query = ask_vacancy()
     all_links = scan_search_results(query)
-    p = Pool(20)
+    p = Pool(64)
     all_data = tuple(p.map(fetch_vacancy_pages, all_links))
     p.terminate()
     p.join()
