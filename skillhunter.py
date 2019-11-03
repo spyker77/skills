@@ -66,6 +66,7 @@ TECH = (
     'solr',
 
     # Frameworks
+    'aiohttp',
     'angular',
     'angularjs',
     'celery',
@@ -76,6 +77,7 @@ TECH = (
     'docker-compose',
     'drupal',
     'falcon',
+    'fastapi',
     'flask',
     'hadoop',
     'kafka',
@@ -92,8 +94,10 @@ TECH = (
     'react',
     'reactjs',
     'redux',
+    'sanic',
     'spark',
     'spring',
+    'starlette',
     'symfony',
     'tomcat',
     'tornado',
