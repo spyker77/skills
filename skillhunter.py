@@ -1,21 +1,32 @@
+# Try to replace slow lists to more performant collections.deque
+
+import requests
+
 import sys
+import random
 import subprocess
-import urllib.request
 from time import sleep
 from multiprocessing import Pool
 
 # If [SSL: CERTIFICATE_VERIFY_FAILED] occurs, then enable the following 2 lines.
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
+# import ssl
+# ssl._create_default_https_context = ssl._create_unverified_context
 
 while True:
     try:
         from bs4 import BeautifulSoup
         break
     except ImportError:
-        subprocess.check_call([sys.executable, '-m', 'pip',
-                               'install', 'beautifulsoup4'])
+        subprocess.check_call(
+            [sys.executable, '-m', 'pip', 'install', 'beautifulsoup4'])
 
+
+HEADERS = {
+    "user-agent": [
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:70.0) Gecko/20100101 Firefox/70.0",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36",
+    ]}
 TECH = (
     # Languages
     '.net',
@@ -61,6 +72,7 @@ TECH = (
     'mariadb',
     'mongodb',
     'mysql',
+    'neo4j',
     'postgresql',
     'redis',
     'solr',
@@ -197,17 +209,15 @@ def scan_search_results(query):
         url = "https://hh.ru/search/vacancy?text=" + \
             query + f"&page={page_num}"
         sleep(0.2)
-        # page = requests.get(source, headers=HEADERS, allow_redirects=False)
-        req = urllib.request.Request(url)
-        with urllib.request.urlopen(req) as response:
-            the_page = response.read()
-        soup = BeautifulSoup(the_page, "html.parser")
+        random_headers = random.choice(HEADERS["user-agent"])
+        req = requests.get(url, headers={"user-agent": random_headers})
+        soup = BeautifulSoup(req.text, "html.parser")
         all_vacancies = soup.find_all("a", class_="bloko-link HH-LinkModifier")
         if all_vacancies:
-            # Extract links to vacancy pages and clean them from unnecessary tails.
+            # Extract valid links to vacancy pages and clean them from unnecessary tails.
             for vacancy in all_vacancies:
                 link = vacancy.get("href").split("?")[0]
-                if link in all_links:
+                if link in all_links or link == "https://hhcdn.ru/click":
                     pass
                 else:
                     all_links.append(link)
@@ -219,16 +229,19 @@ def scan_search_results(query):
 
 def fetch_vacancy_pages(url):
     # Fetch data from vacancy pages.
-    req = urllib.request.Request(url)
-    with urllib.request.urlopen(req) as response:
-        the_page = response.read()
+    random_headers = random.choice(HEADERS["user-agent"])
+    req = requests.get(url, headers={"user-agent": random_headers})
     sleep(0.2)
-    soup = BeautifulSoup(the_page, "html.parser")
-    description = soup.find(attrs={"data-qa": "vacancy-description"}).text
-    # Remove the punctuation except the # and + signs.
-    all_data = description.translate(str.maketrans(
-        "", "", "!\"$%&'()*,-./:;<=>?@[\\]^_`{|}~"))
-    return all_data
+    soup = BeautifulSoup(req.text, "html.parser")
+    try:
+        description = soup.find(attrs={"data-qa": "vacancy-description"}).text
+        # Remove the punctuation except the # and + signs.
+        all_data = description.translate(str.maketrans(
+            "", "", "!\"$%&'()*,-./:;<=>?@[\\]^_`{|}~"))
+        return all_data
+    except AttributeError:
+        print(f"AttributeError occurred with the following URL: {url}")
+        pass
 
 
 def process_data(all_data):
@@ -262,6 +275,7 @@ def process_data(all_data):
 if __name__ == "__main__":
     query = ask_vacancy()
     all_links = scan_search_results(query)
+    # print(f"Here are the number of available positions: {len(all_links)}")
     p = Pool(64)
     all_data = tuple(p.map(fetch_vacancy_pages, all_links))
     p.terminate()
