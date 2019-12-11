@@ -1,32 +1,19 @@
-# Try to replace slow lists to more performant collections.deque
-
-import requests
-
 import sys
 import random
 import subprocess
 from time import sleep
 from multiprocessing import Pool
 
-# If [SSL: CERTIFICATE_VERIFY_FAILED] occurs, then enable the following 2 lines.
-# import ssl
-# ssl._create_default_https_context = ssl._create_unverified_context
-
-while True:
-    try:
-        from bs4 import BeautifulSoup
-        break
-    except ImportError:
-        subprocess.check_call(
-            [sys.executable, '-m', 'pip', 'install', 'beautifulsoup4'])
+import requests
+from bs4 import BeautifulSoup
 
 
-HEADERS = {
-    "user-agent": [
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:70.0) Gecko/20100101 Firefox/70.0",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36",
-    ]}
+HEADERS = {"user-agent": [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:70.0) Gecko/20100101 Firefox/70.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36",
+]}
+
 TECH = (
     # Languages
     '.net',
@@ -195,9 +182,10 @@ TECH = (
 
 def ask_vacancy():
     # Ask for vacancy to parse.
-    raw_query = input("Please, put the vacancy you wanna check 👉  ").replace(
+    raw_query = input("Please, put the vacancy you wanna check 👉  ")
+    prepared_query = raw_query.replace(
         "+", "%2B").replace(" ", "+").replace("#", "%23")
-    query = f"\"{raw_query}\""
+    query = f"\"{prepared_query}\""
     return query
 
 
@@ -208,9 +196,9 @@ def scan_search_results(query):
     while True:
         url = "https://hh.ru/search/vacancy?text=" + \
             query + f"&page={page_num}"
-        sleep(0.2)
         random_headers = random.choice(HEADERS["user-agent"])
         req = requests.get(url, headers={"user-agent": random_headers})
+        sleep(0.1)
         soup = BeautifulSoup(req.text, "html.parser")
         all_vacancies = soup.find_all("a", class_="bloko-link HH-LinkModifier")
         if all_vacancies:
@@ -231,7 +219,7 @@ def fetch_vacancy_pages(url):
     # Fetch data from vacancy pages.
     random_headers = random.choice(HEADERS["user-agent"])
     req = requests.get(url, headers={"user-agent": random_headers})
-    sleep(0.2)
+    sleep(0.1)
     soup = BeautifulSoup(req.text, "html.parser")
     try:
         description = soup.find(attrs={"data-qa": "vacancy-description"}).text
@@ -249,8 +237,8 @@ def process_data(all_data):
     counts = {}
     for data in all_data:
         # Finish cleaning the data by correcting the format of ".net".
-        separated_data = (map(lambda d: d.replace(
-            "net", ".net"), data.lower().split()))
+        separated_data = (map(lambda d: d.replace("net", ".net"),
+                              data.lower().split()))
         for word in separated_data:
             if word in counts and word in TECH:
                 counts[word] += 1
@@ -265,8 +253,9 @@ def process_data(all_data):
             #     counts[word] = 1
 
     # Sort key, value pairs by value in descending order and slice the first 20 items.
-    sorted_counts = (
-        sorted(counts.items(), key=lambda x: x[1], reverse=True)[:20])
+    sorted_counts = (sorted(counts.items(),
+                            key=lambda x: x[1],
+                            reverse=True)[:20])
     print(f"🔥  Here are the most demanded knowledge for this position:")
     for pair in sorted_counts:
         print(f"\"{pair[0]}\" – {pair[1]}")
@@ -276,8 +265,6 @@ if __name__ == "__main__":
     query = ask_vacancy()
     all_links = scan_search_results(query)
     # print(f"Here are the number of available positions: {len(all_links)}")
-    p = Pool(64)
-    all_data = tuple(p.map(fetch_vacancy_pages, all_links))
-    p.terminate()
-    p.join()
+    with Pool(64) as p:
+        all_data = tuple(p.map(fetch_vacancy_pages, all_links))
     process_data(all_data)
