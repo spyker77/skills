@@ -1,245 +1,256 @@
-import sys
+import re
 import random
-import subprocess
-from time import sleep
 from multiprocessing import Pool
+from urllib.parse import urlencode
 
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.expected_conditions import presence_of_element_located
+from selenium.common.exceptions import TimeoutException
 
 
-HEADERS = {"user-agent": [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:70.0) Gecko/20100101 Firefox/70.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36",
-]}
+HEADERS = {
+    "user-agent": [
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:71.0) Gecko/20100101 Firefox/71.0",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36",
+    ]
+}
 
 TECH = (
     # Languages
-    '.net',
-    'net',
-    'assembly',
-    'c',
-    'c#',
-    'c++',
-    'css',
-    'css3',
-    'd',
-    'delphi',
-    'elixir',
-    'f#',
-    'go',
-    'golang',
-    'groovy',
-    'es6',
-    'html',
-    'html5',
-    'java',
-    'javascript',
-    'js',
-    'kotlin',
-    'matlab',
-    'nosql',
-    'objective-c',
-    'perl',
-    'php',
-    'python',
-    'python3',
-    'r',
-    'ruby',
-    'rust',
-    'scala',
-    'sql',
-    'swift',
-    'typescript',
-
+    ".net",
+    "net",
+    "assembly",
+    "c",
+    "c#",
+    "c++",
+    "css",
+    "css3",
+    "d",
+    "delphi",
+    "elixir",
+    "f#",
+    "go",
+    "golang",
+    "groovy",
+    "es6",
+    "html",
+    "html5",
+    "java",
+    "javascript",
+    "js",
+    "kotlin",
+    "matlab",
+    "nosql",
+    "objective-c",
+    "perl",
+    "php",
+    "python",
+    "python3",
+    "r",
+    "ruby",
+    "rust",
+    "scala",
+    "sql",
+    "swift",
+    "typescript",
     # Databases
-    'cassandra',
-    'elasticsearch',
-    'mariadb',
-    'mongodb',
-    'mysql',
-    'neo4j',
-    'postgresql',
-    'redis',
-    'solr',
-
+    "cassandra",
+    "elasticsearch",
+    "mariadb",
+    "mongodb",
+    "mysql",
+    "neo4j",
+    "postgresql",
+    "redis",
+    "solr",
     # Frameworks
-    'aiohttp',
-    'angular',
-    'angularjs',
-    'celery',
-    'dagger',
-    'dagger2',
-    'django',
-    'docker',
-    'docker-compose',
-    'drupal',
-    'falcon',
-    'fastapi',
-    'flask',
-    'hadoop',
-    'kafka',
-    'kubernetes',
-    'laravel',
-    'maven',
-    'memcached',
-    'nameko',
-    'nodejs',
-    'nuxt',
-    'pytest',
-    'rabbitmq',
-    'rails',
-    'react',
-    'reactjs',
-    'redux',
-    'sanic',
-    'spark',
-    'spring',
-    'starlette',
-    'symfony',
-    'tomcat',
-    'tornado',
-    'unittest',
-    'vue',
-    'vuejs',
-    'yii',
-    'zend',
-
+    "aiohttp",
+    "angular",
+    "angularjs",
+    "celery",
+    "dagger",
+    "dagger2",
+    "django",
+    "docker",
+    "docker-compose",
+    "drupal",
+    "falcon",
+    "fastapi",
+    "flask",
+    "hadoop",
+    "kafka",
+    "kubernetes",
+    "laravel",
+    "maven",
+    "memcached",
+    "nameko",
+    "nodejs",
+    "nuxt",
+    "pytest",
+    "rabbitmq",
+    "rails",
+    "react",
+    "reactjs",
+    "redux",
+    "sanic",
+    "spark",
+    "spring",
+    "starlette",
+    "symfony",
+    "tomcat",
+    "tornado",
+    "unittest",
+    "vue",
+    "vuejs",
+    "yii",
+    "zend",
     # Libraries
-    'beautifulsoup',
-    'bootstrap',
-    'extjs',
-    'hibernate',
-    'jquery',
-    'keras',
-    'matplotlib',
-    'numpy',
-    'pandas',
-    'pytorch',
-    'scikit',
-    'scikit-learn',
-    'scipy',
-    'scrapy',
-    'selenium',
-    'tensorflow',
-    'theano',
-
+    "beautifulsoup",
+    "bootstrap",
+    "extjs",
+    "hibernate",
+    "jquery",
+    "keras",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "pytorch",
+    "scikit",
+    "scikit-learn",
+    "scipy",
+    "scrapy",
+    "selenium",
+    "tensorflow",
+    "theano",
     # Concepts
-    'agile',
-    'cd',
-    'ci',
-    'ci/cd',
-    'devops',
-    'graphql',
-    'microservice',
-    'microservices',
-    'multithreading',
-    'mvc',
-    'oop',
-    'rest',
-    'scrum',
-    'soa',
-    'soap',
-    'solid',
-
+    "agile",
+    "cd",
+    "ci",
+    "ci/cd",
+    "devops",
+    "graphql",
+    "microservice",
+    "microservices",
+    "multithreading",
+    "mvc",
+    "oop",
+    "rest",
+    "scrum",
+    "soa",
+    "soap",
+    "solid",
     # Other
-    'ajax',
-    'apache',
-    'aws',
-    'azure',
-    'babel',
-    'bash',
-    'bitbucket',
-    'capybara',
-    'circleci',
-    'cloudlinux',
-    'git',
-    'github',
-    'gitlab',
-    'gulp',
-    'imunify360',
-    'jenkins',
-    'jira',
-    'less',
-    'linux',
-    'nginx',
-    'npm',
-    'pwa',
-    'pycharm',
-    'rspec',
-    'sass',
-    'shell',
-    'spa',
-    'stl',
-    'travis',
-    'unix',
-    'webpack',
-    'xml',
-    'yarn',
+    "ajax",
+    "apache",
+    "aws",
+    "azure",
+    "babel",
+    "bash",
+    "bitbucket",
+    "capybara",
+    "circleci",
+    "cloudlinux",
+    "git",
+    "github",
+    "gitlab",
+    "gulp",
+    "imunify360",
+    "jenkins",
+    "jira",
+    "less",
+    "linux",
+    "nginx",
+    "npm",
+    "pwa",
+    "pycharm",
+    "rspec",
+    "sass",
+    "shell",
+    "spa",
+    "stl",
+    "travis",
+    "unix",
+    "webpack",
+    "xml",
+    "yarn",
 )
+
+
+def initialize_webdriver():
+    # Run webdriver with random user-agent and headless mode.
+    options = Options()
+    options.add_argument("-headless")
+    random_headers = random.choice(HEADERS["user-agent"])
+    profile = webdriver.FirefoxProfile()
+    profile.set_preference("general.useragent.override", random_headers)
+    driver = webdriver.Firefox(profile, options=options, service_log_path="/dev/null")
+    return driver
 
 
 def ask_vacancy():
     # Ask for vacancy to parse.
     raw_query = input("Please, put the vacancy you wanna check 👉  ")
-    prepared_query = raw_query.replace(
-        "+", "%2B").replace(" ", "+").replace("#", "%23")
-    query = f"\"{prepared_query}\""
+    query = f'"{raw_query}"'
     return query
 
 
-def scan_search_results(query):
+def scan_search_results(query, driver):
     # Scan search pages for vacancy links.
-    all_links = []
     page_num = 0
+    all_links = set()
     while True:
-        url = "https://hh.ru/search/vacancy?text=" + \
-            query + f"&page={page_num}"
-        random_headers = random.choice(HEADERS["user-agent"])
-        req = requests.get(url, headers={"user-agent": random_headers})
-        sleep(0.1)
-        soup = BeautifulSoup(req.text, "html.parser")
-        all_vacancies = soup.find_all("a", class_="bloko-link HH-LinkModifier")
-        if all_vacancies:
+        payload = {
+            "text": query,
+            "page": page_num,
+        }
+        try:
+            driver.get("https://hh.ru/search/vacancy?" + urlencode(payload))
+            WebDriverWait(driver, 0.1).until(
+                presence_of_element_located(
+                    (By.XPATH, '//a[contains(@href,"https://hh.ru/vacancy")]')
+                )
+            )
+            all_vacancies = driver.find_elements(
+                By.XPATH, '//a[contains(@href,"https://hh.ru/vacancy")]'
+            )
             # Extract valid links to vacancy pages and clean them from unnecessary tails.
             for vacancy in all_vacancies:
-                link = vacancy.get("href").split("?")[0]
-                if link in all_links or link == "https://hhcdn.ru/click":
-                    pass
-                else:
-                    all_links.append(link)
+                link = vacancy.get_attribute("href").split("?")[0]
+                all_links.add(link)
             page_num += 1
-        else:
+        except TimeoutException:
+            # Think of replacing the exception logic with interaction through counting.
+            driver.quit()
             break
     return all_links
 
 
-def fetch_vacancy_pages(url):
+def fetch_vacancy_pages(link):
     # Fetch data from vacancy pages.
     random_headers = random.choice(HEADERS["user-agent"])
-    req = requests.get(url, headers={"user-agent": random_headers})
-    sleep(0.1)
-    soup = BeautifulSoup(req.text, "html.parser")
+    page = requests.get(link, headers={"user-agent": random_headers})
+    soup = BeautifulSoup(page.text, "html.parser")
     try:
         description = soup.find(attrs={"data-qa": "vacancy-description"}).text
-        # Remove the punctuation except the # and + signs.
-        all_data = description.translate(str.maketrans(
-            "", "", "!\"$%&'()*,-./:;<=>?@[\\]^_`{|}~"))
-        return all_data
+        return description
     except AttributeError:
-        print(f"AttributeError occurred with the following URL: {url}")
+        print(f"AttributeError occurred with the following URL: {link}")
         pass
 
 
-def process_data(all_data):
-    # Extract and display result data.
+def process_descriptions(all_descriptions):
+    # Extract keywords from the descriptions and count each.
     counts = {}
-    for data in all_data:
-        # Finish cleaning the data by correcting the format of ".net".
-        separated_data = (map(lambda d: d.replace("net", ".net"),
-                              data.lower().split()))
-        for word in separated_data:
+    for description in all_descriptions:
+        pattern = r"\w+\S+\w+|[a-zA-Z]+\S|\S+[a-zA-Z]|\w+"
+        separated_words = re.findall(pattern, description.lower())
+        for word in separated_words:
             if word in counts and word in TECH:
                 counts[word] += 1
             elif word not in counts and word in TECH:
@@ -251,20 +262,23 @@ def process_data(all_data):
             #     counts[word] += 1
             # else:
             #     counts[word] = 1
+    return counts
 
+
+def show_skills(counts):
     # Sort key, value pairs by value in descending order and slice the first 20 items.
-    sorted_counts = (sorted(counts.items(),
-                            key=lambda x: x[1],
-                            reverse=True)[:20])
-    print(f"🔥  Here are the most demanded knowledge for this position:")
+    sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    print(f"🔥  Here are the most demanded skills for this position:")
     for pair in sorted_counts:
-        print(f"\"{pair[0]}\" – {pair[1]}")
+        print(f'"{pair[0]}" – {pair[1]}')
 
 
 if __name__ == "__main__":
+    driver = initialize_webdriver()
     query = ask_vacancy()
-    all_links = scan_search_results(query)
-    # print(f"Here are the number of available positions: {len(all_links)}")
+    all_links = scan_search_results(query, driver)
+    print(f"Here are the number of available positions: {len(all_links)}")
     with Pool(64) as p:
-        all_data = tuple(p.map(fetch_vacancy_pages, all_links))
-    process_data(all_data)
+        all_descriptions = tuple(p.map(fetch_vacancy_pages, all_links))
+    counts = process_descriptions(all_descriptions)
+    show_skills(counts)
