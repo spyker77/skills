@@ -4,6 +4,7 @@ from multiprocessing import Pool
 from urllib.parse import urlencode
 
 import requests
+from tqdm import tqdm
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -195,7 +196,7 @@ def initialize_webdriver():
 
 def ask_vacancy():
     # Ask for vacancy to parse.
-    raw_query = input("Please, put the vacancy you wanna check 👉  ")
+    raw_query = input("Please, enter the job you wanna check 👉 ")
     query = f'"{raw_query}"'
     return query
 
@@ -225,7 +226,7 @@ def scan_search_results(query, driver):
                 all_links.add(link)
             page_num += 1
         except TimeoutException:
-            # Think of replacing the exception logic with interaction through counting.
+            # Think of replacing the exception logic with iteration through counting!
             driver.quit()
             break
     return all_links
@@ -250,6 +251,7 @@ def process_descriptions(all_descriptions):
     for description in all_descriptions:
         pattern = r"\w+\S+\w+|[a-zA-Z]+\S|\S+[a-zA-Z]|\w+"
         separated_words = re.findall(pattern, description.lower())
+        # Think of using original formatting of the names for the end result!
         for word in separated_words:
             if word in counts and word in TECH:
                 counts[word] += 1
@@ -268,7 +270,7 @@ def process_descriptions(all_descriptions):
 def show_skills(counts):
     # Sort key, value pairs by value in descending order and slice the first 20 items.
     sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:20]
-    print(f"🔥  Here are the most demanded skills for this position:")
+    print(f"Here are the most demanded skills for this job:")
     for pair in sorted_counts:
         print(f'"{pair[0]}" – {pair[1]}')
 
@@ -276,9 +278,18 @@ def show_skills(counts):
 if __name__ == "__main__":
     driver = initialize_webdriver()
     query = ask_vacancy()
+    print("Checking the job...")
     all_links = scan_search_results(query, driver)
-    print(f"Here are the number of available positions: {len(all_links)}")
+    print(f"Here are the number of available jobs: {len(all_links)}")
     with Pool(64) as p:
-        all_descriptions = tuple(p.map(fetch_vacancy_pages, all_links))
+        # Show progress bar while fetching previously collected vacancy links.
+        all_descriptions = tuple(
+            tqdm(
+                p.imap_unordered(fetch_vacancy_pages, all_links),
+                desc="Processing jobs",
+                total=len(all_links),
+                bar_format="{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}]",
+            )
+        )
     counts = process_descriptions(all_descriptions)
     show_skills(counts)
