@@ -249,7 +249,8 @@ def process_descriptions(all_descriptions):
     # Extract keywords from the descriptions and count each.
     counts = {}
     for description in all_descriptions:
-        pattern = r"\w+\S+\w+|[a-zA-Z]+\S|\S+[a-zA-Z]|\w+"
+        # This pattern doesn't identify phrases like "Visual Basic .NET".
+        pattern = r"\w+\S+\w+|[a-zA-Z]+[+|#]+|\S+[a-zA-Z]|\w+"
         separated_words = re.findall(pattern, description.lower())
         # Think of using original formatting of the names for the end result!
         for word in separated_words:
