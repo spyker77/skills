@@ -1,3 +1,4 @@
+# from datetime import datetime
 import re
 import random
 from multiprocessing import Pool
@@ -41,7 +42,7 @@ TECH = (
     "Groovy",
     "ES6",
     "HTML",
-    "HTML",
+    "HTML5",
     "Java",
     "JavaScript",
     "JS",
@@ -71,10 +72,12 @@ TECH = (
     "Redis",
     "Solr",
     # Frameworks
-    "AIOHTTP",
+    "aiohttp",
     "Angular",
     "AngularJS",
+    "Ansible",
     "Celery",
+    "Chef",
     "Dagger",
     "Dagger2",
     "Django",
@@ -93,6 +96,7 @@ TECH = (
     "Nameko",
     "Nodejs",
     "Nuxt",
+    "Puppet",
     "pytest",
     "RabbitMQ",
     "Rails",
@@ -104,6 +108,7 @@ TECH = (
     "Spring",
     "Starlette",
     "Symfony",
+    "Terraform",
     "Tomcat",
     "Tornado",
     "unittest",
@@ -112,6 +117,7 @@ TECH = (
     "Yii",
     "Zend",
     # Libraries
+    "asyncio",
     "BeautifulSoup",
     "Bootstrap",
     "ExtJS",
@@ -155,6 +161,7 @@ TECH = (
     "Bash",
     "Bitbucket",
     "Capybara",
+    "Circle",
     "CircleCI",
     "CloudLinux",
     "Git",
@@ -227,7 +234,6 @@ def scan_search_results(query, driver):
                 all_links.add(link)
             page_num += 1
         except TimeoutException:
-            # Think of replacing the exception logic with iteration through counting!
             driver.quit()
             break
     return all_links
@@ -237,7 +243,7 @@ def fetch_vacancy_pages(link):
     # Fetch data from vacancy pages.
     random_headers = random.choice(HEADERS["user-agent"])
     page = requests.get(link, headers={"user-agent": random_headers})
-    soup = BeautifulSoup(page.text, "html.parser")
+    soup = BeautifulSoup(page.text, "lxml")
     try:
         description = soup.find(attrs={"data-qa": "vacancy-description"}).text
         return description
@@ -250,10 +256,9 @@ def process_descriptions(all_descriptions):
     # Extract keywords from the descriptions and count each.
     counts = {}
     for description in all_descriptions:
-        # This pattern doesn't identify phrases like "Visual Basic .NET".
+        # This pattern doesn't identify phrases like "Visual Basic .NET"!
         pattern = r"\w+\S+\w+|[a-zA-Z]+[+|#]+|\S+[a-zA-Z]|\w+"
-        separated_words = re.findall(pattern, description.lower())
-        # Think of using original formatting of the names for the end result!
+        separated_words = re.findall(pattern, description.casefold())
         for word in separated_words:
 
             case_insensitive_counts = (key.casefold() for key in counts)
