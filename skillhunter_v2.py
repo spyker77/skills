@@ -1,10 +1,13 @@
 import re
 import random
 import asyncio
+import collections
+from multiprocessing import Pool
+
 
 import aiohttp
 from bs4 import BeautifulSoup
-from lxml.etree import ParseError, ParserError
+from aiohttp.client_exceptions import ClientPayloadError
 
 HEADERS = {
     "user-agent": [
@@ -190,52 +193,53 @@ def ask_vacancy():
     return query
 
 
-async def scan_search_results(query, session):
-    # Scan search pages for vacancy links.
-    page_num = 0
+async def scan_single_search_page(query, page_num, session):
+    # Scan search page for vacancy links.
+    payload = {
+        "text": query,
+        "page": page_num,
+    }
+    async with session.get("https://hh.ru/search/vacancy", params=payload) as resp:
+        html = await resp.text()
+        soup = BeautifulSoup(html, "lxml")
+        all_vacancies = soup.find_all("a", href=re.compile(r"https://hh.ru/vacancy/"))
+        # Extract valid links to vacancy pages and clean their tails.
+        links = set(vacancy["href"].split("?")[0] for vacancy in all_vacancies)
+        return links
+
+
+async def scan_all_search_results(query, session):
+    # Schedule all search results for further asynchronous processing.
+    tasks = []
+    for page_num in range(100):
+        task = asyncio.create_task(scan_single_search_page(query, page_num, session))
+        tasks.append(task)
+    all_sets = await asyncio.gather(*tasks)
+    # Unpack the list of sets into a single set of all links.
     all_links = set()
-    pattern = re.compile(r"https://hh.ru/vacancy/")
-    while True:
-        payload = {
-            "text": query,
-            "page": page_num,
-        }
-        try:
-            async with session.get(
-                "https://hh.ru/search/vacancy", params=payload
-            ) as resp:
-                html = await resp.text()
-                soup = BeautifulSoup(html, "lxml")
-                all_vacancies = soup.find_all("a", href=pattern)
-                len_of_all_links_on_previous_iteration = len(all_links)
-                # Extract valid links to vacancy pages and clean their tails.
-                new_links = set(
-                    vacancy["href"].split("?")[0] for vacancy in all_vacancies
-                )
-                all_links.update(new_links)
-                if len(all_links) > len_of_all_links_on_previous_iteration:
-                    page_num += 1
-                else:
-                    break
-        except (ParseError, ParserError):
-            print("🚨 Error occurred!")
-            break
+    for s in all_sets:
+        all_links.update(s)
     return all_links
 
 
 async def fetch_vacancy_page(link, session):
+    # Extract vacancy description from the provided link.
     async with session.get(link) as resp:
-        html = await resp.text()
-        soup = BeautifulSoup(html, "lxml")
         try:
+            html = await resp.text()
+            soup = BeautifulSoup(html, "lxml")
             description = soup.find(attrs={"data-qa": "vacancy-description"}).text
+            return description
         except AttributeError:
             print(f"AttributeError occurred with the following URL: {link}")
             pass
-        return description
+        except ClientPayloadError:
+            print(f"ClientPayloadError occurred with the following URL: {link}")
+            pass
 
 
 async def fetch_all_vacancy_pages(all_links, session):
+    # Schedule all the vacancy pages for further asynchronous processing.
     tasks = []
     for link in all_links:
         task = asyncio.create_task(fetch_vacancy_page(link, session))
@@ -244,12 +248,12 @@ async def fetch_all_vacancy_pages(all_links, session):
     return all_descriptions
 
 
-def process_vacancy_descriptions(all_descriptions):
+def process_vacancy_descriptions(description):
     # Extract keywords from the descriptions and count each keyword.
     counts = {}
-    for description in all_descriptions:
-        # This pattern doesn't identify phrases like "Visual Basic .NET"!
-        pattern = r"\w+\S+\w+|[a-zA-Z]+[+|#]+|\S+[a-zA-Z]|\w+"
+    # This pattern doesn't identify phrases like "Visual Basic .NET"!
+    pattern = r"\w+\S+\w+|[a-zA-Z]+[+|#]+|\S+[a-zA-Z]|\w+"
+    if description != None:
         separated_words = re.findall(pattern, description.casefold())
         for word in separated_words:
 
@@ -271,29 +275,43 @@ def process_vacancy_descriptions(all_descriptions):
             #     counts[word] += 1
             # else:
             #     counts[word] = 1
-    return counts
+        return counts
+    else:
+        pass
 
 
-def show_skills(counts):
+def unite_counts(separate_counts):
+    # Unite all the dicts created by multiprocessing.
+    super_dict = collections.defaultdict(list)
+    for count in separate_counts:
+        for k, v in count.items():
+            super_dict[k].append(v)
+    united_counts = {k: sum(v) for k, v in super_dict.items()}
+    return united_counts
+
+
+def show_skills(united_counts):
     # Sort key, value pairs by value in descending order and slice the first 20 items.
-    sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)[:20]
+    sorted_counts = sorted(united_counts.items(), key=lambda x: x[1], reverse=True)[:20]
     print(f"Here are the most demanded skills for this job:")
     for pair in sorted_counts:
         print(f'"{pair[0]}" – {pair[1]}')
 
 
 async def main():
-    random_headers = random.choice(HEADERS["user-agent"])
-    async with aiohttp.ClientSession(
-        headers={"user-agent": random_headers},
-    ) as session:
+    random_agent = random.choice(HEADERS["user-agent"])
+    async with aiohttp.ClientSession(headers={"user-agent": random_agent}) as session:
         query = ask_vacancy()
         print("Checking the job...")
-        all_links = await scan_search_results(query, session)
+        all_links = await scan_all_search_results(query, session)
         print(f"Here are the number of available jobs: {len(all_links)}")
         all_descriptions = await fetch_all_vacancy_pages(all_links, session)
-        counts = process_vacancy_descriptions(all_descriptions)
-        show_skills(counts)
+        with Pool() as p:
+            separate_counts = p.imap_unordered(
+                process_vacancy_descriptions, all_descriptions
+            )
+            united_counts = unite_counts(separate_counts)
+            show_skills(united_counts)
 
 
 if __name__ == "__main__":
