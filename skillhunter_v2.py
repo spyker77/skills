@@ -4,10 +4,13 @@ import asyncio
 import collections
 from multiprocessing import Pool
 
-
+# import nltk
+# nltk.download("stopwords")
 import aiohttp
 from bs4 import BeautifulSoup
+from nltk.corpus import stopwords
 from aiohttp.client_exceptions import ClientPayloadError
+
 
 HEADERS = {
     "user-agent": [
@@ -18,172 +21,13 @@ HEADERS = {
 }
 
 
-TECH = (
-    # Languages
-    ".NET",
-    "NET",
-    "assembly",
-    "C",
-    "C#",
-    "C++",
-    "CSS",
-    "CSS3",
-    "D",
-    "Delphi",
-    "Flixir",
-    "F#",
-    "Go",
-    "Golang",
-    "Groovy",
-    "ES6",
-    "HTML",
-    "HTML5",
-    "Java",
-    "JavaScript",
-    "JS",
-    "Kotlin",
-    "MATLAB",
-    "NoSQL",
-    "Objective-C",
-    "Perl",
-    "PHP",
-    "Python",
-    "Python3",
-    "R",
-    "Ruby",
-    "Rust",
-    "Scala",
-    "SQL",
-    "Swift",
-    "TypeScript",
-    # Databases
-    "Cassandra",
-    "Elasticsearch",
-    "MariaDB",
-    "MongoDB",
-    "MySQL",
-    "Neo4j",
-    "PostgreSQL",
-    "Redis",
-    "Solr",
-    # Frameworks
-    "aiohttp",
-    "Angular",
-    "AngularJS",
-    "Ansible",
-    "Celery",
-    "Chef",
-    "Dagger",
-    "Dagger2",
-    "Django",
-    "Docker",
-    "docker-compose",
-    "Drupal",
-    "Falcon",
-    "FastAPI",
-    "Flask",
-    "Hadoop",
-    "Kafka",
-    "Kubernetes",
-    "Laravel",
-    "Maven",
-    "Memcached",
-    "Nameko",
-    "Nodejs",
-    "Nuxt",
-    "Puppet",
-    "pytest",
-    "RabbitMQ",
-    "Rails",
-    "React",
-    "Reactjs",
-    "Redux",
-    "Sanic",
-    "Spark",
-    "Spring",
-    "Starlette",
-    "Symfony",
-    "Terraform",
-    "Tomcat",
-    "Tornado",
-    "unittest",
-    "Vue",
-    "Vuejs",
-    "Yii",
-    "Zend",
-    # Libraries
-    "asyncio",
-    "BeautifulSoup",
-    "Bootstrap",
-    "ExtJS",
-    "Hibernate",
-    "jQuery",
-    "Reras",
-    "Matplotlib",
-    "NumPY",
-    "pandas",
-    "PyTorch",
-    "scikit",
-    "scikit-learn",
-    "SciPy",
-    "Scrapy",
-    "Selenium",
-    "TensorFlow",
-    "Theano",
-    # Concepts
-    "Agile",
-    "CD",
-    "CI",
-    "CI/CD",
-    "DevOps",
-    "GraphQL",
-    "Microservice",
-    "Microservices",
-    "Multithreading",
-    "MVC",
-    "OOP",
-    "RESY",
-    "Scrum",
-    "SOA",
-    "SOAP",
-    "SOLID",
-    # Other
-    "Ajax",
-    "Apache",
-    "AWS",
-    "Azure",
-    "Babel",
-    "Bash",
-    "Bitbucket",
-    "Capybara",
-    "Circle",
-    "CircleCI",
-    "CloudLinux",
-    "Git",
-    "GitHub",
-    "GitLab",
-    "gulp",
-    "Imunify360",
-    "Jenkins",
-    "JIRA",
-    "Less",
-    "Linux",
-    "Nginx",
-    "npm",
-    "PWA",
-    "PyCharm",
-    "RSpec",
-    "Sass",
-    "shell",
-    "SPA",
-    "STL",
-    "Travis",
-    "TravisCI",
-    "Unix",
-    "Webpack",
-    "XML",
-    "Yarn",
-)
+russian_stopwords = stopwords.words("russian")
+english_stopwords = stopwords.words("english")
+STOPWORDS = [*russian_stopwords, *english_stopwords]
+
+
+with open("tech.txt", mode="r", encoding="utf-8") as file:
+    TECH = file.read().replace(",", "").splitlines()
 
 
 def ask_vacancy():
@@ -210,7 +54,7 @@ async def scan_single_search_page(query, page_num, session):
 
 async def scan_all_search_results(query, session):
     # Schedule all search results for further asynchronous processing.
-    tasks = []
+    tasks = list()
     for page_num in range(100):
         task = asyncio.create_task(scan_single_search_page(query, page_num, session))
         tasks.append(task)
@@ -240,7 +84,7 @@ async def fetch_vacancy_page(link, session):
 
 async def fetch_all_vacancy_pages(all_links, session):
     # Schedule all the vacancy pages for further asynchronous processing.
-    tasks = []
+    tasks = list()
     for link in all_links:
         task = asyncio.create_task(fetch_vacancy_page(link, session))
         tasks.append(task)
@@ -250,13 +94,14 @@ async def fetch_all_vacancy_pages(all_links, session):
 
 def process_vacancy_descriptions(description):
     # Extract keywords from the descriptions and count each keyword.
-    counts = {}
+    counts = dict()
     # This pattern doesn't identify phrases like "Visual Basic .NET"!
     pattern = r"\w+\S+\w+|[a-zA-Z]+[+|#]+|\S+[a-zA-Z]|\w+"
     if description != None:
         separated_words = re.findall(pattern, description.casefold())
-        for word in separated_words:
-
+        # Clean from the unnecessary stopwords.
+        cleaned_words = (word for word in separated_words if word not in STOPWORDS)
+        for word in cleaned_words:
             case_insensitive_counts = (key.casefold() for key in counts)
             case_insensitive_tech = [element.casefold() for element in TECH]
 
@@ -275,6 +120,7 @@ def process_vacancy_descriptions(description):
             #     counts[word] += 1
             # else:
             #     counts[word] = 1
+
         return counts
     else:
         pass
@@ -284,8 +130,11 @@ def unite_counts(separate_counts):
     # Unite all the dicts created by multiprocessing.
     super_dict = collections.defaultdict(list)
     for count in separate_counts:
-        for k, v in count.items():
-            super_dict[k].append(v)
+        if count != None:
+            for k, v in count.items():
+                super_dict[k].append(v)
+        else:
+            pass
     united_counts = {k: sum(v) for k, v in super_dict.items()}
     return united_counts
 
@@ -304,7 +153,7 @@ async def main():
         query = ask_vacancy()
         print("Checking the job...")
         all_links = await scan_all_search_results(query, session)
-        print(f"Here are the number of available jobs: {len(all_links)}")
+        print(f"The number of jobs available is {len(all_links)}")
         all_descriptions = await fetch_all_vacancy_pages(all_links, session)
         with Pool() as p:
             separate_counts = p.imap_unordered(
