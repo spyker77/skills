@@ -9,4 +9,4 @@ Later on, multiprocessing was added as an attempt to optimize the speed of parsi
 This is a continuation of the original idea, only this time based on aiohttp + asyncio to further optimize speed and reduce hardware requirements. For example, the execution time of the query `frontend developer` took 147 secs and 324 secs for v2 and v1 respectively.
 
 # Coming soon...
-Hopefully, this will grow into a full-featured Django project. Potentially, hard-coded skills can be replaced by NLP, and the use of this service can be expanded beyond programming.
+Hopefully, this will grow into a full-featured Django project. Potentially, hard-coded skills can be replaced by NLP, and the use of this service can be expanded beyond programming. Intermediate implementation is already here -> https://skillhunter-app.herokuapp.com/
